@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>키워드 뉴스 트래커</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+      body { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'; margin: 0; color: #0f172a; background: #f8fafc; }
+      .container { max-width: 920px; margin: 0 auto; padding: 24px; }
+      h1 { font-size: 24px; margin: 0 0 16px; }
+      .card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); padding: 16px; }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; }
+      input[type=text] { flex: 1; min-width: 240px; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+      button { background: #0ea5e9; color: white; border: none; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+      button.secondary { background: #334155; }
+      button:disabled { background: #94a3b8; cursor: not-allowed; }
+      .pill { display: inline-flex; align-items: center; gap: 6px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 999px; padding: 6px 10px; margin: 6px 6px 0 0; font-size: 13px; }
+      .pill button { background: transparent; color: #334155; padding: 0; margin-left: 4px; }
+      .section-title { font-weight: 700; margin: 16px 0 8px; font-size: 14px; color: #0f172a; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+      .item { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; }
+      .item a { color: #0369a1; text-decoration: none; }
+      .muted { color: #64748b; font-size: 12px; }
+      .footer { text-align: center; color: #64748b; font-size: 12px; margin-top: 24px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>키워드 뉴스 트래커</h1>
+      <div class="card">
+        <div class="row" style="margin-bottom: 8px;">
+          <input id="keywordInput" type="text" placeholder="키워드를 입력 후 Enter" />
+          <button id="addBtn">키워드 추가</button>
+          <button id="searchBtn" class="secondary">Search</button>
+        </div>
+        <div id="keywordList"></div>
+        <div class="muted" style="margin-top:8px;">Search 버튼을 누를 때마다 최신 소식을 가져와 아래에 표시합니다.</div>
+      </div>
+
+      <div class="section-title">결과</div>
+      <div id="results"></div>
+      <div class="footer">Google News RSS를 사용합니다.</div>
+    </div>
+
+    <script>
+      const keywordInput = document.getElementById('keywordInput');
+      const addBtn = document.getElementById('addBtn');
+      const searchBtn = document.getElementById('searchBtn');
+      const keywordList = document.getElementById('keywordList');
+      const results = document.getElementById('results');
+
+      async function refreshKeywordsUI() {
+        const res = await fetch('/api/keywords');
+        const data = await res.json();
+        keywordList.innerHTML = '';
+        (data.keywords || []).forEach(k => addKeywordPill(k));
+      }
+
+      async function setKeywords(keywords) {
+        await fetch('/api/keywords', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keywords })
+        });
+        await refreshKeywordsUI();
+      }
+
+      function getKeywordsFromUI() {
+        return Array.from(keywordList.querySelectorAll('.pill')).map(el => el.dataset.keyword);
+      }
+
+      function addKeywordToUI(kw) {
+        if (!kw) return;
+        kw = kw.trim();
+        if (!kw) return;
+        const exists = Array.from(keywordList.querySelectorAll('.pill')).some(el => el.dataset.keyword === kw);
+        if (exists) return;
+        addKeywordPill(kw);
+      }
+
+      function addKeywordPill(kw) {
+        const el = document.createElement('span');
+        el.className = 'pill';
+        el.dataset.keyword = kw;
+        const label = document.createElement('span');
+        label.textContent = kw;
+        const rm = document.createElement('button');
+        rm.textContent = '×';
+        rm.title = '제거';
+        rm.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          el.remove();
+          await setKeywords(getKeywordsFromUI());
+        });
+        el.appendChild(label);
+        el.appendChild(rm);
+        keywordList.appendChild(el);
+      }
+
+      addBtn.addEventListener('click', async () => {
+        const kw = keywordInput.value;
+        addKeywordToUI(kw);
+        keywordInput.value = '';
+        await setKeywords(getKeywordsFromUI());
+      });
+
+      keywordInput.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') {
+          addBtn.click();
+        }
+      });
+
+      searchBtn.addEventListener('click', async () => {
+        searchBtn.disabled = true;
+        searchBtn.textContent = '검색 중...';
+        try {
+          const res = await fetch('/api/search');
+          const data = await res.json();
+          renderResults(data);
+        } catch (e) {
+          alert('가져오기에 실패했습니다.');
+        } finally {
+          searchBtn.disabled = false;
+          searchBtn.textContent = 'Search';
+        }
+      });
+
+      function renderResults(data) {
+        const { results: byKeyword = {}, updatedAt } = data || {};
+        results.innerHTML = '';
+        const header = document.createElement('div');
+        header.className = 'muted';
+        header.textContent = updatedAt ? `업데이트: ${new Date(updatedAt).toLocaleString()}` : '';
+        results.appendChild(header);
+        Object.entries(byKeyword).forEach(([kw, items]) => {
+          const section = document.createElement('div');
+          const title = document.createElement('div');
+          title.className = 'section-title';
+          title.textContent = `# ${kw}`;
+          section.appendChild(title);
+          const grid = document.createElement('div');
+          grid.className = 'grid';
+          (items || []).forEach((it) => {
+            const card = document.createElement('div');
+            card.className = 'item';
+            const a = document.createElement('a');
+            a.href = it.link;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.textContent = it.title;
+            const meta = document.createElement('div');
+            meta.className = 'muted';
+            meta.textContent = `${it.source ? it.source + ' · ' : ''}${it.pubDate ? new Date(it.pubDate).toLocaleString() : ''}`;
+            card.appendChild(a);
+            card.appendChild(meta);
+            grid.appendChild(card);
+          });
+          section.appendChild(grid);
+          results.appendChild(section);
+        });
+      }
+
+      // init
+      refreshKeywordsUI();
+    </script>
+  </body>
+  </html>
+
