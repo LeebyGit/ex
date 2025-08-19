@@ -214,6 +214,7 @@ class KeywordNewsSearcher {
                         ${this.escapeHtml(result.keyword)} 
                         <span style="font-size: 0.8em; color: #7f8c8d; font-weight: 400;">
                             (${result.results.length}개 결과)
+                            ${result.isRealData ? '<i class="fas fa-wifi" title="실제 뉴스 API 데이터" style="color: #27ae60; margin-left: 8px;"></i>' : '<i class="fas fa-flask" title="시연용 모의 데이터" style="color: #f39c12; margin-left: 8px;"></i>'}
                         </span>
                     </h3>
                     <div class="news-list">
@@ -324,36 +325,77 @@ class RealNewsSearcher extends KeywordNewsSearcher {
         }
 
         try {
-            const params = new URLSearchParams({
-                q: keyword,
-                language: 'ko',
-                sortBy: 'publishedAt',
-                pageSize: 10,
-                apiKey: this.apiKey
-            });
-
-            const response = await fetch(`${this.apiEndpoint}?${params}`);
+            // CORS 문제를 해결하기 위해 여러 방법을 시도
+            let data;
             
-            if (!response.ok) {
-                throw new Error(`API Error: ${response.status}`);
-            }
+            // 방법 1: 직접 호출 시도
+            try {
+                const params = new URLSearchParams({
+                    q: `${keyword} 한국`,
+                    language: 'ko',
+                    sortBy: 'publishedAt',
+                    pageSize: 10,
+                    apiKey: this.apiKey
+                });
 
-            const data = await response.json();
+                const response = await fetch(`${this.apiEndpoint}?${params}`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status}`);
+                }
+
+                data = await response.json();
+            } catch (corsError) {
+                console.log('CORS 오류로 인해 프록시 서버 사용을 시도합니다...');
+                
+                // 방법 2: CORS 프록시 사용
+                const proxyUrl = 'https://api.allorigins.win/get?url=';
+                const params = new URLSearchParams({
+                    q: `${keyword} 한국`,
+                    language: 'ko',
+                    sortBy: 'publishedAt',
+                    pageSize: 10,
+                    apiKey: this.apiKey
+                });
+                
+                const targetUrl = encodeURIComponent(`${this.apiEndpoint}?${params}`);
+                const response = await fetch(`${proxyUrl}${targetUrl}`);
+                
+                if (!response.ok) {
+                    throw new Error(`Proxy Error: ${response.status}`);
+                }
+                
+                const proxyData = await response.json();
+                data = JSON.parse(proxyData.contents);
+            }
+            
+            // 결과가 없거나 오류가 있으면 모의 데이터로 fallback
+            if (!data || !data.articles || data.articles.length === 0) {
+                console.log(`${keyword}에 대한 실제 뉴스가 없어 모의 데이터를 사용합니다.`);
+                return super.searchKeyword(keyword);
+            }
             
             return {
                 keyword: keyword,
-                results: data.articles.map(article => ({
+                results: data.articles.filter(article => article.title && article.url).map(article => ({
                     title: article.title,
-                    snippet: article.description || '',
+                    snippet: article.description || article.content || `${keyword}에 대한 최신 뉴스입니다.`,
                     url: article.url,
-                    source: article.source.name,
+                    source: article.source?.name || '뉴스 소스',
                     publishedAt: article.publishedAt,
                     displayDate: this.formatRelativeTime(new Date(article.publishedAt))
                 })),
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                isRealData: true
             };
         } catch (error) {
             console.error(`Error searching for ${keyword}:`, error);
+            console.log('API 오류로 인해 모의 데이터를 사용합니다.');
             // API 오류 시 모의 결과로 fallback
             return super.searchKeyword(keyword);
         }
@@ -364,16 +406,14 @@ class RealNewsSearcher extends KeywordNewsSearcher {
 let newsSearcher;
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 실제 뉴스 API를 사용하려면 API 키를 여기에 입력하세요
-    // const API_KEY = 'your-news-api-key-here';
-    // newsSearcher = new RealNewsSearcher(API_KEY);
-    
-    // 현재는 모의 데이터를 사용
-    newsSearcher = new KeywordNewsSearcher();
+    // 실제 뉴스 API 사용
+    const API_KEY = 'c6d6b2fa57084901835004fe27269445';
+    newsSearcher = new RealNewsSearcher(API_KEY);
     
     // 웰컴 메시지 표시 (선택사항)
-    console.log('키워드 뉴스 검색기가 시작되었습니다!');
-    console.log('실제 뉴스 API를 사용하려면 script.js에서 API 키를 설정하세요.');
+    console.log('🗞️ 키워드 뉴스 검색기가 시작되었습니다!');
+    console.log('📡 실제 NewsAPI를 사용하여 최신 뉴스를 가져옵니다.');
+    console.log('🔍 키워드를 추가하고 검색 버튼을 눌러보세요!');
 });
 
 // 페이지 언로드 시 키워드 자동 저장
