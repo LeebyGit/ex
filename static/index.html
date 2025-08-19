@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>키워드 모니터</title>
+		<link rel="stylesheet" href="/static/styles.css" />
+	</head>
+	<body>
+		<header>
+			<h1>키워드 최신 소식</h1>
+		</header>
+
+		<main>
+			<section class="controls">
+				<div class="keyword-input">
+					<input id="keywordInput" type="text" placeholder="키워드를 입력 후 추가" />
+					<button id="addKeywordBtn">추가</button>
+				</div>
+				<div class="keywords" id="keywords"></div>
+				<div class="actions">
+					<button id="searchBtn">검색</button>
+					<span id="updatedAt" class="updated-at"></span>
+				</div>
+			</section>
+
+			<section id="results" class="results"></section>
+		</main>
+
+		<script src="/static/script.js"></script>
+	</body>
+</html>
