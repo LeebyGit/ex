@@ -222,9 +222,12 @@ class KeywordNewsSearcher {
                             <div class="news-item">
                                 <div class="news-content">
                                     <div class="news-title">
-                                        <a href="${news.url}" target="_blank" rel="noopener noreferrer">
-                                            ${this.escapeHtml(news.title)}
-                                        </a>
+                                        ${news.url ? 
+                                            `<a href="${news.url}" target="_blank" rel="noopener noreferrer" onclick="return confirmNavigation('${this.escapeHtml(news.title)}')">
+                                                ${this.escapeHtml(news.title)}
+                                            </a>` :
+                                            `<span>${this.escapeHtml(news.title)}</span>`
+                                        }
                                     </div>
                                     <div class="news-snippet">
                                         ${this.escapeHtml(news.snippet)}
@@ -238,9 +241,16 @@ class KeywordNewsSearcher {
                                             <i class="fas fa-clock"></i>
                                             ${news.displayDate}
                                         </span>
-                                        <a href="${news.url}" target="_blank" rel="noopener noreferrer" class="external-link">
-                                            기사 읽기 <i class="fas fa-external-link-alt"></i>
-                                        </a>
+                                        <div class="news-links">
+                                            ${news.url ? 
+                                                `<a href="${news.url}" target="_blank" rel="noopener noreferrer" class="external-link" onclick="return confirmNavigation('${this.escapeHtml(news.title)}')">
+                                                    <i class="fas fa-external-link-alt"></i> 원본 기사
+                                                </a>` : ''
+                                            }
+                                            <a href="${newsSearcher.createAlternativeSearchUrl(news.keyword || result.keyword, news.title)}" target="_blank" rel="noopener noreferrer" class="external-link search-link">
+                                                <i class="fas fa-search"></i> 구글에서 검색
+                                            </a>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -385,10 +395,12 @@ class RealNewsSearcher extends KeywordNewsSearcher {
                 results: data.articles.filter(article => article.title && article.url).map(article => ({
                     title: article.title,
                     snippet: article.description || article.content || `${keyword}에 대한 최신 뉴스입니다.`,
-                    url: article.url,
+                    url: this.validateAndFixUrl(article.url),
+                    originalUrl: article.url,
                     source: article.source?.name || '뉴스 소스',
                     publishedAt: article.publishedAt,
-                    displayDate: this.formatRelativeTime(new Date(article.publishedAt))
+                    displayDate: this.formatRelativeTime(new Date(article.publishedAt)),
+                    keyword: keyword // 검색 키워드도 저장
                 })),
                 timestamp: new Date().toISOString(),
                 isRealData: true
@@ -399,6 +411,33 @@ class RealNewsSearcher extends KeywordNewsSearcher {
             // API 오류 시 모의 결과로 fallback
             return super.searchKeyword(keyword);
         }
+    }
+
+    validateAndFixUrl(url) {
+        if (!url) return null;
+        
+        // URL이 이미 완전한 형태인지 확인
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+            return url;
+        }
+        
+        // 상대 URL인 경우 https 추가
+        if (url.startsWith('//')) {
+            return 'https:' + url;
+        }
+        
+        // 프로토콜이 없는 경우 https 추가
+        if (!url.startsWith('http')) {
+            return 'https://' + url;
+        }
+        
+        return url;
+    }
+
+    createAlternativeSearchUrl(keyword, title) {
+        // 구글 뉴스 검색 URL 생성
+        const searchQuery = encodeURIComponent(`${keyword} ${title}`);
+        return `https://news.google.com/search?q=${searchQuery}&hl=ko&gl=KR&ceid=KR:ko`;
     }
 }
 
@@ -422,3 +461,14 @@ window.addEventListener('beforeunload', () => {
         newsSearcher.saveKeywords();
     }
 });
+
+// 링크 클릭 시 확인 함수
+function confirmNavigation(title) {
+    // 개발 환경에서는 확인 없이 바로 이동
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return true;
+    }
+    
+    // 실제 환경에서는 확인 대화상자 표시
+    return confirm(`"${title}" 기사를 새 탭에서 열까요?\n\n링크가 작동하지 않을 수 있습니다. 그런 경우 "구글에서 검색" 링크를 사용해보세요.`);
+}

@@ -305,6 +305,14 @@ body {
     gap: 15px;
     font-size: 12px;
     color: #95a5a6;
+    flex-wrap: wrap;
+}
+
+.news-links {
+    display: flex;
+    gap: 10px;
+    margin-top: 5px;
+    flex-wrap: wrap;
 }
 
 .news-source {
@@ -331,6 +339,20 @@ body {
 .external-link:hover {
     color: #2980b9;
     transform: translateX(2px);
+}
+
+.search-link {
+    color: #27ae60 !important;
+    background: rgba(39, 174, 96, 0.1);
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+}
+
+.search-link:hover {
+    color: #219a52 !important;
+    background: rgba(39, 174, 96, 0.2);
+    transform: translateY(-1px);
 }
 
 .no-results {
